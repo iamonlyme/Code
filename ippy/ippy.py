@@ -102,27 +102,6 @@ class IpLib(object):
 			return False
 		return True
 
-	def getConfigForIP(self, ip):
-		"""
-			This prints the config for an IP, which is either relevant entries
-			from the config file or, if set to the magic link local value, some
-			link local routing config for the IP.
-			ip looks like "192.169.34.211/24"
-		"""
-		addr, maskbit = ip.split("/")
-		addrlist = addr.split(".")
-		dest = ip
-		if maskbit == "8":
-			dest = addrlist[0] + ".0.0.0/8"
-		elif maskbit == "16":
-			dest = addrlist[0] + "." + addrlist[1] + ".0.0/16"
-		elif maskbit == "24":
-			dest = addrlist[0] + "." + addrlist[1] + "." + addrlist[2] + ".0/24"
-		elif maskbit == "32":
-			dest = addr + "/32"
-
-		return addr, dest
-
 	def checkIfaceStatus(self, iface):
 		"""
 		check iface status, False - Down; True - UP
@@ -608,6 +587,35 @@ class IpLib(object):
 				print("[Error]addRoutingForIp failed!")
 
 		return ret
+
+	def updatePublicIps(self, new_ips, iface):
+		"""
+			release all public addresses via ippy
+		"""
+		last_ret = IpLib.ESUCCESS
+		old_ips = self.getPublicIps()
+
+		for ip in old_ips:
+			if ip in new_ips:
+				continue
+			# not belong to new_ips
+			ret = self.releasePublicIP(ip, iface)
+			if ret != IpLib.ESUCCESS:
+				last_ret = ret
+			else:
+				continue
+
+		for ip in new_ips:
+			if ip in old_ips:
+				continue
+			# new ip in new_ips has not been set
+			ret = self.takePublicIP(ip, iface)
+			if ret != IpLib.ESUCCESS:
+				last_ret = ret
+			else:
+				continue
+
+		return last_ret
 
 	def releaseAllPublicIps(self):
 		"""
