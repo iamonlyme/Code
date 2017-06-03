@@ -13,6 +13,13 @@ import re
 import socket
 import subprocess
 
+import logging
+import logging.config
+from cmath import log
+
+logging.config.fileConfig("../logger.conf")
+logger = logging.getLogger("ippy")
+
 class IpLib(object):
 	ESUCCESS	= 0
 	EFAILED		= -1
@@ -23,32 +30,36 @@ class IpLib(object):
 	PER_IP_ROUTING_RULE_PREF	= 10000
 	PER_IP_ROUTING_TABLE_ID_LOW	= 10
 	PER_IP_ROUTING_TABLE_ID_HIGH	=250
-	IPPY_ETCDIR	= "/run"
+	IPPY_RUNDIR	= "/run"
 
 	def __init__(self):
 		pass
 
 	def comCheckCall(self, command):
 		try:
-			print(command)
-			subprocess.check_call(command, shell=True)
+			logger.debug(command)
+			subprocess.check_call(command, \
+								stdout=open('/dev/null','w'), \
+								stderr=subprocess.STDOUT, \
+								shell=True)
 		except:
-			print("[info]%s failed" %(command))
+			logger.debug("%s failed" %(command))
 			return IpLib.EFAILED
 		return IpLib.ESUCCESS
 
-	def comCheckOutput(self, command):
+	def getCheckOutput(self, command):
 		try:
-			print(command)
-			output = subprocess.check_output(command, shell=True)
+			logger.debug(command)
+			output = subprocess.check_output(command, stderr=open('/dev/null','w'), shell=True)
 		except:
-			print("[info]%s failed" %(command))
+			logger.debug("%s failed" %(command))
 			return IpLib.EFAILED, ""
 		return IpLib.ESUCCESS, output
 
 	def checkIpv4Valid(self, ip):
 		"""
 			check ipv4 address valid
+			1. 0 =< seg =< 255
 		"""
 		if len(ip) != len(ip.replace(" ", "")):
 			return False
@@ -65,14 +76,18 @@ class IpLib(object):
 
 		return True
 
-	def Ipv4AddrToNet(self,ip):
+	def ipv4AddrToNet(self, ip):
 		"""
 			This prints the config for an IP, which is either relevant entries
 			from the config file or, if set to the magic link local value, some
 			link local routing config for the IP.
 			ip looks like "192.169.34.211/24"
 		"""
-		addr, maskbit = ip.split("/")
+		try:
+			addr, maskbit = ip.split("/")
+		except:
+			addr = ip
+			maskbit = "32"
 		segs = addr.split(".")
 		addr_ul = 0
 		for seg in segs:
@@ -90,7 +105,6 @@ class IpLib(object):
 				net_addr = str((net_ul & 255)) + "." + net_addr
 			net_ul = net_ul >> 8
 			count = count + 1
-
 		return net_addr + "/" + maskbit
 
 	def ipHasConfiguration(self, ip):
@@ -104,7 +118,7 @@ class IpLib(object):
 
 	def checkIfaceStatus(self, iface):
 		"""
-		check iface status, False - Down; True - UP
+			check iface status, False - Down; True - UP
 		"""
 		cmmd = "ip link show %s | grep 'state UP'" %(iface)
 		ret = self.comCheckCall(cmmd)
@@ -113,11 +127,21 @@ class IpLib(object):
 		else:
 			return True
 
+	def bringUpIface(self, iface):
+		"""
+			bring up iface
+		"""
+		cmmd = "ip link set %s up" %(iface)
+		return self.comCheckCall(cmmd)
+
 	def checkIpExists(self, ip, iface):
 		"""
 			whether ip is on iface;
 			if yes return True, else return False
 		"""
+		if not ip or not iface:
+			return False
+
 		cmmd = "ip addr list dev '%s' | grep -Fq 'inet %s '" %(iface, ip)
 		ret = self.comCheckCall(cmmd)
 		if ret != IpLib.ESUCCESS:
@@ -130,32 +154,31 @@ class IpLib(object):
 			add ip to iface
 			ip looks like "192.169.34.128/24"
 		"""
-		if not ip or not self.ipHasConfiguration(ip):
-			print("[Error]IP is invalid")
+		if not ip or not self.ipHasConfiguration(ip) or not iface:
+			logger.error("ip or iface is invalid")
 			return IpLib.EINVALID
 
 		if self.checkIpExists(ip, iface):
-			print("%s has been on dev %s" %(ip, iface))
+			logger.info("%s has been on dev %s" %(ip, iface))
 			return IpLib.ESUCCESS
 
-		lockfile = IpLib.IPPY_ETCDIR + "/ippy_iface_%s.flock" %(iface)
+		lockfile = IpLib.IPPY_RUNDIR + "/ippy_iface_%s.flock" %(iface)
 		try:
 			fd = os.open(lockfile, os.O_CREAT | os.O_EXCL | os.O_RDWR)
 		except:
-			print("[Error]race failed for %s" %(iface))
+			logger.error("race failed for %s" %(iface))
 			return IpLib.EFAILED
 
 		# Ensure interface is up
-		cmmd = "ip link set %s up" %(iface)
-		ret = self.comCheckCall(cmmd)
+		ret = self.bringUpIface(iface)
 		if ret != IpLib.ESUCCESS:
-			print("[Error]failed to bringup interface %s" %(iface))
+			logger.error("failed to bringup interface %s" %(iface))
 		else:
 			# add ip address to interface
 			cmmd = "ip addr add %s brd + dev %s" %(ip, iface)
 			ret = self.comCheckCall(cmmd)
 			if ret != IpLib.ESUCCESS:
-				print("[Error]Failed to add %s on dev %s" %(ip, iface))
+				logger.error("Failed to add %s on dev %s" %(ip, iface))
 
 		os.close(fd)
 		os.unlink(lockfile)
@@ -166,15 +189,19 @@ class IpLib(object):
 			delete ip from iface
 			ip looks like "192.169.34.128/24"
 		"""
+		if not ip or not self.ipHasConfiguration(ip) or not iface:
+			logger.error("ip or iface is invalid")
+			return IpLib.EINVALID
+
 		if not self.checkIpExists(ip, iface):
-			print("Could not find %s on dev %s" %(ip, iface))
+			logger.info("Could not find %s on dev %s" %(ip, iface))
 			return IpLib.ESUCCESS
 
-		lockfile = IpLib.IPPY_ETCDIR + "/ippy_iface_%s.flock" %(iface)
+		lockfile = IpLib.IPPY_RUNDIR + "/ippy_iface_%s.flock" %(iface)
 		try:
 			fd = os.open(lockfile, os.O_CREAT | os.O_EXCL | os.O_RDWR)
 		except:
-			print("[Error]race failed for %s" %(iface))
+			logger.error("Race failed for %s" %(iface))
 			return IpLib.EFAILED
 
 		"""
@@ -188,12 +215,13 @@ class IpLib(object):
 		ret = self.comCheckCall(cmmd)
 		if ret != IpLib.ESUCCESS:
 			# not primary
+			logger.debug("Check secondary addr for %s" %(iface))
 			cmmd = "ip addr list dev '%s' secondary | grep 'inet '" %(iface)
-			ret, output = self.comCheckOutput(cmmd)
+			ret, output = self.getCheckOutput(cmmd)
 			if ret != IpLib.ESUCCESS:
-				print("[Error] failed to list secondary addr for %s" %(iface))
+				logger.error("Failed to list secondary addr for %s" %(iface))
 			elif not output:
-				print("[Error] No secondary addr for %s" %(iface))
+				logger.error("No secondary addr for %s" %(iface))
 			else:			
 				lines = output.split("\n")
 				for line in lines:
@@ -210,12 +238,14 @@ class IpLib(object):
 						continue
 					if inet == "inet":
 						secondaries.append(snd_ip)
+		else:
+			logger.debug("This is as primary addr for %s" %(iface))
 
 		local_rc = 0
 		cmmd = "ip addr del '%s' dev '%s'" %(ip, iface)
 		ret = self.comCheckCall(cmmd)
 		if ret != IpLib.ESUCCESS:
-			print("[Error]Failed to del %s on dev %s" %(ip, iface))
+			logger.error("Failed to del %s on dev %s" %(ip, iface))
 			local_rc = 1
 
 		for snd_ip in secondaries:
@@ -224,13 +254,13 @@ class IpLib(object):
 			cmmd = "ip addr list dev '%s' secondary | grep -Fq 'inet %s'" %(iface, snd_ip)
 			ret = self.comCheckCall(cmmd)
 			if ret == IpLib.ESUCCESS:
-				print("Kept secondary %s on dev %s" %(snd_ip, iface))
+				logger.info("Kept secondary %s on dev %s" %(snd_ip, iface))
 			else:
-				print("Re-adding secondary address %s to dev %s" %(snd_ip, iface))
+				logger.info("Re-adding secondary address %s to dev %s" %(snd_ip, iface))
 				cmmd = "ip addr add %s brd + dev %s" %(snd_ip, iface)
 				ret = self.comCheckCall(cmmd)
 				if ret != IpLib.ESUCCESS:
-					print("[Error]Failed to re-add address %s to dev %s" %(snd_ip, iface))
+					logger.error("Failed to re-add address %s to dev %s" %(snd_ip, iface))
 					local_rc = 1
 			# end if
 
@@ -240,19 +270,19 @@ class IpLib(object):
 			ret = IpLib.EFAILED
 		return ret
 
-	def CleanUpTableIds(self, ip):
+	def cleanUpTableIds(self):
 		"""
 			Clean up all the table ids that we might own.
 		"""
 		file_name = "/etc/iproute2/rt_tables"
 		if not os.path.isfile(file_name):
-			print("%s not exist." %(file_name))
+			logger.info("%s not exist." %(file_name))
 			return IpLib.ESUCCESS
 
 		try:
 			fp = open(file_name, "r+")
 		except:
-			print("[Error]open %s failed" %(file_name))
+			logger.error("Failed to open %s" %(file_name))
 			return IpLib.EFAILED
 
 		new_lines = []
@@ -275,15 +305,19 @@ class IpLib(object):
 		"""
 			Clean up all the table ids that we might own.
 		"""
+		if not ip:
+			logger.error("ip or iface is invalid")
+			return IpLib.EINVALID
+
 		file_name = "/etc/iproute2/rt_tables"
 		if not os.path.isfile(file_name):
-			print("%s not exist." %(file_name))
+			logger.info("%s not exist." %(file_name))
 			return IpLib.ESUCCESS
 
 		try:
 			fp = open(file_name, "r+")
 		except:
-			print("[Error]open %s failed" %(file_name))
+			logger.error("Failed to open %s" %(file_name))
 			return IpLib.EFAILED
 
 		keywords = IpLib.TABLE_ID_PREFIX + ip
@@ -309,6 +343,10 @@ class IpLib(object):
 			it just needs to exist in /etc/iproute2/rt_tables.  Fail if no free
 			table id could be found in the configured range.
 		"""
+		if not ip:
+			logger.error("ip or iface is invalid")
+			return IpLib.EINVALID
+
 		route_dir = "/etc/iproute2"
 		if not os.path.isdir(route_dir):
 			os.mkdir(route_dir)
@@ -317,7 +355,7 @@ class IpLib(object):
 		try:
 			fp = open(file_name, "r+")
 		except:
-			print("[Error]open %s failed" %(file_name))
+			logger.error("Failed to open %s" %(file_name))
 			return IpLib.EFAILED
 
 		new_label = IpLib.TABLE_ID_PREFIX + ip
@@ -342,7 +380,7 @@ class IpLib(object):
 
 			# Found existing: done
 			if t_label == new_label:
-				print("%s has been in %s" %(new_label, file_name))
+				logger.info("%s has been in %s" %(new_label, file_name))
 				fp.close()
 				return IpLib.ESUCCESS
 			if IpLib.PER_IP_ROUTING_TABLE_ID_LOW <= t_id and t_id <= IpLib.PER_IP_ROUTING_TABLE_ID_HIGH:
@@ -362,7 +400,7 @@ class IpLib(object):
 			fp.write(new_line)
 			ret = IpLib.ESUCCESS
 		else:
-			print("[Error]out of table ids in range %d -%d " 
+			logger.error("out of table ids in range %d-%d " 
 				%(IpLib.PER_IP_ROUTING_TABLE_ID_LOW, IpLib.PER_IP_ROUTING_TABLE_ID_HIGH))
 			ret = IpLib.EFAILED
 
@@ -378,8 +416,8 @@ class IpLib(object):
 		table_id = IpLib.TABLE_ID_PREFIX + ip
 		cmmd = "ip rule del from %s pref %s table %s" %(ip, pref, table_id)
 		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
-			print("[Error]failed to del rule for %s" %(ip))
-			return IpLib.EFAILED
+			logger.error("[Error]failed to del rule for %s" %(ip))
+			#ret_rule = IpLib.EFAILED
 
 		# This should never usually fail, so don't redirect output.
 		# However, it can fail when deleting a rogue IP, since there will
@@ -391,17 +429,19 @@ class IpLib(object):
 		# ip route flush table $_table_id 2>&1 | sed -e 's@^.@  &@'
 		cmmd = "ip route flush table %s" %(table_id)
 		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
-			print("[Error]failed to flush rule for deleting %s" %(table_id))
-			return IpLib.EFAILED
+			logger.error("Failed to flush rule for deleting %s" %(table_id))
+			#ret_route = IpLib.EFAILED
 
 		if self.eraseTableIdForIp(ip) != IpLib.ESUCCESS:
-			print("[Error]eraseTableIdForIp failed")
+			logger.error("Failed to erase table id for %s" %(ip))
 			return IpLib.EFAILED
 
 		return IpLib.ESUCCESS
 
 	def addRoutingForIp(self, ip, iface, gateway=None):
-
+		"""
+			add route for ip
+		"""
 		if self.ensureTableIdForIp(ip) != IpLib.ESUCCESS:
 			return IpLib.EFAILED
 
@@ -412,10 +452,10 @@ class IpLib(object):
 		table_id = IpLib.TABLE_ID_PREFIX + ip
 		cmmd = "ip rule add from %s pref %s table %s" %(ip, pref, table_id)
 		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
-			print("[Error]failed to add rule for %s" %(ip))
+			logger.error("Failed to add rule for %s" %(ip))
 			return IpLib.EFAILED
 
-		net_wlan = self.Ipv4AddrToNet(ip)
+		net_wlan = self.ipv4AddrToNet(ip)
 		# Add routes to table for any lines matching the IP.
 		if gateway:
 			route = "%s +via %s dev %s table %s" %(net_wlan, gateway, iface, table_id)
@@ -423,7 +463,9 @@ class IpLib(object):
 			route = "%s dev %s table %s" %(net_wlan, iface, table_id)
 		cmmd = "ip route add %s" %(route)
 		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
-			print("[Error]failed to add route: %s" %(route))
+			logger.error("Failed to add route: %s" %(route))
+			cmmd = "ip rule del from %s pref %s table %s" %(ip, pref, table_id)
+			self.comCheckCall(cmmd)
 			return IpLib.EFAILED
 		return IpLib.ESUCCESS
 
@@ -432,7 +474,7 @@ class IpLib(object):
 			flush rules and routes
 		"""
 		cmmd = "ip rule show"
-		ret, output = self.comCheckOutput(cmmd)
+		ret, output = self.getCheckOutput(cmmd)
 		if ret != IpLib.ESUCCESS:
 			print("[Error] failed to show ip rules")
 			return ret
@@ -493,9 +535,9 @@ class IpLib(object):
 		"""
 		iface = ""
 		cmmd = "ip addr show| grep 'inet %s '" %(ip)
-		ret, output = self.comCheckOutput(cmmd)
+		ret, output = self.getCheckOutput(cmmd)
 		if ret != IpLib.ESUCCESS or not output:
-			print("Could not find %s in addr list" %(ip))
+			logger.error("Failed to find %s in addr list" %(ip))
 			return ret, iface
 		output = output.replace("\n", "")
 		words = output.split(" ")
@@ -535,8 +577,8 @@ class IpLib(object):
 			try:
 				m = re.match("(\S+)\s+(\S+)", line)
 				if m.group(1) and m.group(2):
-					list = m.group(2).split("_")
-					ips.append(list[1])
+					arr = m.group(2).split("_")
+					ips.append(arr[1])
 			except:
 				continue
 
@@ -547,21 +589,23 @@ class IpLib(object):
 			release publip address
 		"""
 		if not ip or not self.ipHasConfiguration(ip):
-			print("[Error]IP is invalid")
+			logger.error("IP is invalid")
 			return IpLib.EINVALID
 
 		if not self.checkIpExists(ip, iface):
-			print("Could not find %s on dev %s" %(ip, iface))
-			return IpLib.ESUCCESS
-
-		# delete ip address
-		ret = self.delIpFromIface(ip, iface)
-		if ret != IpLib.ESUCCESS:
-			print("[Error]delIpFromIface failed!")
+			logger.error("Failed to find %s on dev %s" %(ip, iface))
+			ret = IpLib.ESUCCESS
 		else:
+			# delete ip address
+			ret = self.delIpFromIface(ip, iface)
+			if ret != IpLib.ESUCCESS:
+				logger.error("Failed to delete ip for %s from %s" %(ip, iface))
+
+		# delete route
+		if ret == IpLib.ESUCCESS:
 			ret = self.delRoutingForIp(ip)
 			if ret != IpLib.ESUCCESS:
-				print("[Error]delRoutingForIp failed!")
+				logger.error("Failed to delete route for %s" %(ip))
 
 		return ret
 
@@ -570,21 +614,21 @@ class IpLib(object):
 			update publip ip address
 		"""
 		if not ip or not self.ipHasConfiguration(ip):
-			print("[Error]IP is invalid")
+			logger.error("IP is invalid")
 			return IpLib.EINVALID
 
 		if self.checkIpExists(ip, iface):
-			print("%s has been on dev %s" %(ip, iface))
+			logger.info("%s has been on dev %s" %(ip, iface))
 			return IpLib.ESUCCESS
 
 		# add ip address
 		ret = self.addIpToIface(ip, iface)
 		if ret != IpLib.ESUCCESS:
-			print("[Error]addIpToIface failed!")
+			logger.error("Failed to add ip %s to iface %s" %(ip, iface))
 		else:
 			ret = self.addRoutingForIp(ip, iface, gateway)
 			if ret != IpLib.ESUCCESS:
-				print("[Error]addRoutingForIp failed!")
+				logger.error("Failed to add route for %s" %(ip))
 
 		return ret
 
@@ -639,12 +683,43 @@ class IpLib(object):
 
 		return last_ret
 
-	def checkPublicIpConn(self, ip, iface):
+	def checkIpConn(self, ip, iface):
 		"""
 			check publip address status
 		"""
-		if self.checkIfaceStatus(iface) and self.checkIpExists(ip, iface):
+		if not self.checkIfaceStatus(iface):
+			self.bringUpIface(iface)
+			if not self.checkIfaceStatus(iface):
+				return False
+		
+		if self.checkIpExists(ip, iface):
+			return True
+		elif self.takePublicIP(ip, iface) == IpLib.ESUCCESS:
 			return True
 		else:
 			return False
 
+	def checkIpsConn(self, ips, iface):
+		"""
+			check publip address status
+		"""
+		if not self.checkIfaceStatus(iface):
+			self.bringUpIface(iface)
+			if not self.checkIfaceStatus(iface):
+				return False
+
+		down = 0
+		for ip in ips:
+			if self.checkIpExists(ip, iface):
+				continue
+			elif self.takePublicIP(ip, iface) == IpLib.ESUCCESS:
+				continue
+			else:
+				down = 1
+				break
+
+		# some ip coulud not be set
+		if down == 1:
+			return False
+
+		return True
