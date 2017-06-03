@@ -586,7 +586,7 @@ class IpLib(object):
 
 	def takePublicIP(self, ip, iface, gateway=None):
 		"""
-			update publip ip address
+			update public ip address
 		"""
 		if not ip or not self.ipHasConfiguration(ip) or not iface:
 			logger.error("IP is invalid")
@@ -609,7 +609,7 @@ class IpLib(object):
 
 	def releasePublicIP(self, ip, iface, gw=None):
 		"""
-			release publip address
+			release publiclip address
 		"""
 		if not ip or not self.ipHasConfiguration(ip) or not iface:
 			logger.error("IP is invalid")
@@ -685,7 +685,7 @@ class IpLib(object):
 
 	def checkIpConn(self, ip, iface):
 		"""
-			check publip address status
+			check public address status
 		"""
 		if not self.checkIfaceStatus(iface):
 			self.bringUpIface(iface)
@@ -701,7 +701,7 @@ class IpLib(object):
 
 	def checkIpsConn(self, ips, iface):
 		"""
-			check publip address status
+			check public address status
 		"""
 		if not self.checkIfaceStatus(iface):
 			self.bringUpIface(iface)
