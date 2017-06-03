@@ -20,6 +20,9 @@ IP_EXIST1 = "192.168.124.51/24"
 IP_NEW_1 = "192.167.125.151/24"
 IP_MASK_1 = "192.167.125.0/24"
 IP_NEW_2 = "192.167.125.152/24"
+IP_NEW_3 = "192.167.125.153/24"
+IP_NEW_4 = "192.167.125.154/24"
+IP_NEW_5 = "192.167.125.155/24"
 IP_NOT_EXIST = "192.167.126.50/24"
 
 def setReturn(ret, data=None):
@@ -77,17 +80,15 @@ class IpLibTestCase(unittest.TestCase):
         self.assertFalse(self.ip.ipHasConfiguration("192.169.34.3/a"))
 
     def test_checkIfaceStatus(self):
-        subprocess.check_call("ifconfig %s down" %IFACE_EXIST1, shell=True)        
+        subprocess.check_call("ip link set %s down" %IFACE_EXIST1, shell=True)        
         self.assertFalse(self.ip.checkIfaceStatus(IFACE_EXIST1))
-        subprocess.check_call("ifconfig %s up" %IFACE_EXIST1, shell=True)         
+        subprocess.check_call("ip link set %s up" %IFACE_EXIST1, shell=True)         
         self.assertTrue(self.ip.checkIfaceStatus(IFACE_EXIST1))        
         self.assertFalse(self.ip.checkIfaceStatus(IFACE_NOT_EXIST))
 
     def test_bringUpIface(self):
-        subprocess.check_call("ifconfig %s down" %IFACE_EXIST1, shell=True)        
-        self.assertEqual(self.ip.bringUpIface(IFACE_EXIST1), IpLib.ESUCCESS)
-        subprocess.check_call("ifconfig %s up" %IFACE_EXIST1, shell=True)         
-        self.assertEqual(self.ip.bringUpIface(IFACE_EXIST1), IpLib.ESUCCESS)        
+        subprocess.check_call("ip link set %s down" %IFACE_EXIST1, shell=True)    
+        self.assertEqual(self.ip.bringUpIface(IFACE_EXIST1), IpLib.ESUCCESS)      
         self.assertEqual(self.ip.bringUpIface(IFACE_NOT_EXIST), IpLib.EFAILED)
 
     def test_checkIpExists(self):
@@ -102,9 +103,9 @@ class IpLibTestCase(unittest.TestCase):
     def test_addIpToIface(self):
         self.assertEqual(self.ip.addIpToIface("", IFACE_EXIST1), IpLib.EINVALID)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, ""), IpLib.EINVALID)
-        subprocess.check_call("ifconfig %s:t12 %s up" %(IFACE_EXIST1, IP_NEW_1), shell=True)   
+        subprocess.check_call("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
-        subprocess.check_call("ifconfig %s:t12 down" %(IFACE_EXIST1), shell=True)
+        subprocess.check_call("ip addr del %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
         file_name = IpLib.IPPY_RUNDIR + "/ippy_iface_%s.flock" %(IFACE_EXIST1)
         subprocess.check_call("touch %s" %(file_name), shell=True)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, IFACE_EXIST1), IpLib.EFAILED)
@@ -137,8 +138,7 @@ class IpLibTestCase(unittest.TestCase):
         self.assertFalse(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
         self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
         # a test
-        cmd = "ifconfig %s:t12 %s up" %(IFACE_EXIST1, IP_NEW_1)
-        self.assertEqual(self.ip.comCheckCall(cmd), IpLib.ESUCCESS)
+        subprocess.check_call("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
         self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
         self.assertEqual(self.ip.delIpFromIface(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
         # a test
@@ -271,9 +271,9 @@ class IpLibTestCase(unittest.TestCase):
         self.assertEqual(self.ip.getIfaceFromIp(IP_NEW_1), (IpLib.EFAILED,""))
         self.assertEqual(self.ip.getIfaceFromIp(IP_EXIST1), (IpLib.ESUCCESS, IFACE_EXIST1))
 
-        self.assertEqual(self.ip.comCheckCall("ifconfig %s:t12 %s up" %(IFACE_EXIST1, IP_NEW_1)), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.comCheckCall("ip addr add %s dev %s label %s:t12" %(IP_NEW_1,IFACE_EXIST1,IFACE_EXIST1)), IpLib.ESUCCESS)
         self.assertEqual(self.ip.getIfaceFromIp(IP_NEW_1), (IpLib.ESUCCESS, "%s:t12" %IFACE_EXIST1))
-        self.assertEqual(self.ip.comCheckCall("ifconfig %s:t12 down" %(IFACE_EXIST1)), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.comCheckCall("ip addr del %s dev %s" %(IP_NEW_1, IFACE_EXIST1)), IpLib.ESUCCESS)
 
     def test_getPublicIps(self):
         self.assertEqual(self.ip.cleanUpTableIds(), IpLib.ESUCCESS)
@@ -290,6 +290,154 @@ class IpLibTestCase(unittest.TestCase):
         self.assertEqual(self.ip.getPublicIps(), arr)
         self.assertEqual(self.ip.cleanUpTableIds(), IpLib.ESUCCESS)
 
+    def test_takePublicIP(self):
+        self.assertEqual(self.ip.takePublicIP("", IFACE_EXIST1), IpLib.EINVALID)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, ""), IpLib.EINVALID)
+        self.assertEqual(self.ip.takePublicIP(IP_EXIST1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, IFACE_NOT_EXIST), IpLib.EFAILED)
+        #test
+        for i in range(IpLib.PER_IP_ROUTING_TABLE_ID_LOW, IpLib.PER_IP_ROUTING_TABLE_ID_HIGH+1):
+            ip_addr = "192.169.127.%d/24" %i
+            self.assertEqual(self.ip.ensureTableIdForIp(ip_addr), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.EFAILED)
+        self.assertEqual(self.ip.cleanUpTableIds(), IpLib.ESUCCESS)
+        #
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertEqual(self.ip.releasePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        
+
+    def test_releasePublicIP(self):
+        self.assertEqual(self.ip.releasePublicIP("", IFACE_EXIST1), IpLib.EINVALID)
+        self.assertEqual(self.ip.releasePublicIP(IP_EXIST1, ""), IpLib.EINVALID)
+        self.assertEqual(self.ip.releasePublicIP(IP_EXIST1, IFACE_NOT_EXIST), IpLib.ESUCCESS)
+        # test
+        subprocess.check_call("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
+        self.assertEqual(self.ip.releasePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        # test
+        self.assertEqual(self.ip.ensureTableIdForIp(IP_NEW_1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.releasePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertEqual(self.ip.comCheckCall("grep -Fq '%s' /etc/iproute2/rt_tables" %IP_NEW_1), IpLib.EFAILED)
+        # test
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.releasePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+
+    def test_updatePublicIps(self):
+        ips = []
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        # test
+        ips = []
+        ips.append(IP_NEW_1)
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        # test : add one
+        ips = []
+        ips.append(IP_NEW_1)
+        ips.append(IP_NEW_2)
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        # test : add more
+        ips = []
+        ips.append(IP_NEW_1)
+        ips.append(IP_NEW_2)
+        ips.append(IP_NEW_3)
+        ips.append(IP_NEW_4)
+        ips.append(IP_NEW_5)
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_3, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_4, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_5, IFACE_EXIST1))
+        # test delete one
+        ips = []
+        ips.append(IP_NEW_1)
+        ips.append(IP_NEW_2)
+        ips.append(IP_NEW_3)
+        ips.append(IP_NEW_4)
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_3, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_4, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_5, IFACE_EXIST1))
+        # test delete more
+        ips = []
+        ips.append(IP_NEW_1)
+        ips.append(IP_NEW_2)
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_3, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_4, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_5, IFACE_EXIST1))
+        # test delete and add
+        ips = []
+        ips.append(IP_NEW_3)
+        ips.append(IP_NEW_4)
+        ips.append(IP_NEW_5)
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_3, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_4, IFACE_EXIST1))
+        self.assertTrue(self.ip.checkIpExists(IP_NEW_5, IFACE_EXIST1))
+        # test : clear all
+        ips = []
+        self.assertEqual(self.ip.updatePublicIps(ips, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_3, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_4, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_5, IFACE_EXIST1))
+
+    def test_releaseAllPublicIps(self):
+        # test
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertEqual(self.ip.releaseAllPublicIps(), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        # test
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_2, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_3, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.releaseAllPublicIps(), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_3, IFACE_EXIST1))
+        # test 
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_2, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_3, IFACE_EXIST1), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_4, IFACE_EXIST2), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.takePublicIP(IP_NEW_5, IFACE_EXIST2), IpLib.ESUCCESS)
+        self.assertEqual(self.ip.releaseAllPublicIps(), IpLib.ESUCCESS)
+        self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_3, IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_4, IFACE_EXIST2))
+        self.assertFalse(self.ip.checkIpExists(IP_NEW_5, IFACE_EXIST2))
+
 if __name__ =='__main__':#
     suite = unittest.TestSuite()
     suite.addTest(IpLibTestCase("test_comCheckCall"))
@@ -303,12 +451,16 @@ if __name__ =='__main__':#
     suite.addTest(IpLibTestCase("test_addIpToIface"))
     suite.addTest(IpLibTestCase("test_delIpFromIface"))
     suite.addTest(IpLibTestCase("test_cleanUpTableIds"))
-    #suite.addTest(IpLibTestCase("test_ensureTableIdForIp"))
-    #suite.addTest(IpLibTestCase("test_eraseTableIdForIp"))
+    suite.addTest(IpLibTestCase("test_ensureTableIdForIp"))
+    suite.addTest(IpLibTestCase("test_eraseTableIdForIp"))
     suite.addTest(IpLibTestCase("test_delRoutingForIp"))
     suite.addTest(IpLibTestCase("test_addRoutingForIp"))
     suite.addTest(IpLibTestCase("test_getIfaceFromIp"))
     suite.addTest(IpLibTestCase("test_getPublicIps"))
+    suite.addTest(IpLibTestCase("test_takePublicIP"))
+    suite.addTest(IpLibTestCase("test_releasePublicIP"))
+    suite.addTest(IpLibTestCase("test_updatePublicIps"))
+    suite.addTest(IpLibTestCase("test_releaseAllPublicIps"))
 
     #执行测试  
     runner = unittest.TextTestRunner()  

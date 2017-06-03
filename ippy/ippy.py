@@ -584,11 +584,34 @@ class IpLib(object):
 
 		return ips
 
+	def takePublicIP(self, ip, iface, gateway=None):
+		"""
+			update publip ip address
+		"""
+		if not ip or not self.ipHasConfiguration(ip) or not iface:
+			logger.error("IP is invalid")
+			return IpLib.EINVALID
+
+		if self.checkIpExists(ip, iface):
+			logger.info("%s has been on dev %s" %(ip, iface))
+			return IpLib.ESUCCESS
+
+		# add ip address
+		ret = self.addIpToIface(ip, iface)
+		if ret != IpLib.ESUCCESS:
+			logger.error("Failed to add ip %s to iface %s" %(ip, iface))
+		else:
+			ret = self.addRoutingForIp(ip, iface, gateway)
+			if ret != IpLib.ESUCCESS:
+				logger.error("Failed to add route for %s" %(ip))
+
+		return ret
+
 	def releasePublicIP(self, ip, iface, gw=None):
 		"""
 			release publip address
 		"""
-		if not ip or not self.ipHasConfiguration(ip):
+		if not ip or not self.ipHasConfiguration(ip) or not iface:
 			logger.error("IP is invalid")
 			return IpLib.EINVALID
 
@@ -606,29 +629,6 @@ class IpLib(object):
 			ret = self.delRoutingForIp(ip)
 			if ret != IpLib.ESUCCESS:
 				logger.error("Failed to delete route for %s" %(ip))
-
-		return ret
-
-	def takePublicIP(self, ip, iface, gateway=None):
-		"""
-			update publip ip address
-		"""
-		if not ip or not self.ipHasConfiguration(ip):
-			logger.error("IP is invalid")
-			return IpLib.EINVALID
-
-		if self.checkIpExists(ip, iface):
-			logger.info("%s has been on dev %s" %(ip, iface))
-			return IpLib.ESUCCESS
-
-		# add ip address
-		ret = self.addIpToIface(ip, iface)
-		if ret != IpLib.ESUCCESS:
-			logger.error("Failed to add ip %s to iface %s" %(ip, iface))
-		else:
-			ret = self.addRoutingForIp(ip, iface, gateway)
-			if ret != IpLib.ESUCCESS:
-				logger.error("Failed to add route for %s" %(ip))
 
 		return ret
 
