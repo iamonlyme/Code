@@ -9,14 +9,15 @@
 ###############################################
 import os
 import unittest
-import subprocess
+#from unittest.mock import MagicMock,patch
+import mock
 
 from ippy import IpLib
 
 IFACE_EXIST1  = "eno33554984"
 IFACE_EXIST2  = "eno16777736"
 IFACE_NOT_EXIST  = "eno33333333"
-IP_EXIST1 = "192.168.124.51/24"
+IP_EXIST1 = "192.168.124.200/24"
 IP_NEW_1 = "192.167.125.151/24"
 IP_MASK_1 = "192.167.125.0/24"
 IP_NEW_2 = "192.167.125.152/24"
@@ -25,17 +26,9 @@ IP_NEW_4 = "192.167.125.154/24"
 IP_NEW_5 = "192.167.125.155/24"
 IP_NOT_EXIST = "192.167.126.50/24"
 
-def setReturn(ret, data=None):
-    if data == None:
-        return ret
-    return ret, data
-
-def retSuccess(data=None):
-    if data == None:
-        return IpLib.ESUCCESS
-    return IpLib.ESUCCESS, data
 
 class IpLibTestCase(unittest.TestCase):
+
     def setUp(self):
         # prepare environment
         self.ip = IpLib()
@@ -50,11 +43,11 @@ class IpLibTestCase(unittest.TestCase):
         self.assertEqual(self.ip.comCheckCall(suc_cmd), IpLib.ESUCCESS)
         self.assertEqual(self.ip.comCheckCall(err_cmd), IpLib.EFAILED)
 
-    def test_getCheckOutput(self):
+    def test_getCmdOutput(self):
         suc_cmd = "ls /proc/meminfo"
         err_cmd = "ls /proc/meminfo_err"
-        self.assertEqual(self.ip.getCheckOutput(err_cmd), (IpLib.EFAILED,""))
-        self.assertEqual(self.ip.getCheckOutput(suc_cmd), (IpLib.ESUCCESS,"/proc/meminfo\n"))
+        self.assertEqual(self.ip.getCmdOutput(err_cmd), (IpLib.EFAILED,""))
+        self.assertEqual(self.ip.getCmdOutput(suc_cmd), (IpLib.ESUCCESS,"/proc/meminfo\n"))
 
     def test_checkIpv4Valid(self):  
         self.assertTrue(self.ip.checkIpv4Valid("192.169.34.24"))
@@ -80,14 +73,14 @@ class IpLibTestCase(unittest.TestCase):
         self.assertFalse(self.ip.ipHasConfiguration("192.169.34.3/a"))
 
     def test_checkIfaceStatus(self):
-        subprocess.check_call("ip link set %s down" %IFACE_EXIST1, shell=True)        
+        self.assertEqual(self.ip.comCheckCall("ip link set %s down" %IFACE_EXIST1), IpLib.ESUCCESS)       
         self.assertFalse(self.ip.checkIfaceStatus(IFACE_EXIST1))
-        subprocess.check_call("ip link set %s up" %IFACE_EXIST1, shell=True)         
+        self.assertEqual(self.ip.comCheckCall("ip link set %s up" %IFACE_EXIST1), IpLib.ESUCCESS) 
         self.assertTrue(self.ip.checkIfaceStatus(IFACE_EXIST1))        
         self.assertFalse(self.ip.checkIfaceStatus(IFACE_NOT_EXIST))
 
     def test_bringUpIface(self):
-        subprocess.check_call("ip link set %s down" %IFACE_EXIST1, shell=True)    
+        self.assertEqual(self.ip.comCheckCall("ip link set %s down" %IFACE_EXIST1), IpLib.ESUCCESS) 
         self.assertEqual(self.ip.bringUpIface(IFACE_EXIST1), IpLib.ESUCCESS)      
         self.assertEqual(self.ip.bringUpIface(IFACE_NOT_EXIST), IpLib.EFAILED)
 
@@ -103,16 +96,16 @@ class IpLibTestCase(unittest.TestCase):
     def test_addIpToIface(self):
         self.assertEqual(self.ip.addIpToIface("", IFACE_EXIST1), IpLib.EINVALID)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, ""), IpLib.EINVALID)
-        subprocess.check_call("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
+        self.assertEqual(self.ip.comCheckCall("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1)), IpLib.ESUCCESS)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
-        subprocess.check_call("ip addr del %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
+        self.assertEqual(self.ip.comCheckCall("ip addr del %s dev %s" %(IP_NEW_1, IFACE_EXIST1)), IpLib.ESUCCESS)
         file_name = IpLib.IPPY_RUNDIR + "/ippy_iface_%s.flock" %(IFACE_EXIST1)
-        subprocess.check_call("touch %s" %(file_name), shell=True)
+        self.assertEqual(self.ip.comCheckCall("touch %s" %(file_name)), IpLib.ESUCCESS)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, IFACE_EXIST1), IpLib.EFAILED)
-        subprocess.check_call("rm -rf %s" %(file_name), shell=True)
+        self.assertEqual(self.ip.comCheckCall("rm -rf %s" %(file_name)), IpLib.ESUCCESS)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, IFACE_NOT_EXIST), IpLib.EFAILED)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
-        subprocess.check_call("ip addr del %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
+        self.assertEqual(self.ip.comCheckCall("ip addr del %s dev %s" %(IP_NEW_1, IFACE_EXIST1)), IpLib.ESUCCESS)
         #How do test this function when comCheckCall failed
 
     def test_delIpFromIface(self):
@@ -121,9 +114,9 @@ class IpLibTestCase(unittest.TestCase):
         self.assertEqual(self.ip.delIpFromIface(IP_NOT_EXIST, IFACE_EXIST1), IpLib.ESUCCESS)
         # a test
         file_name = IpLib.IPPY_RUNDIR + "/ippy_iface_%s.flock" %(IFACE_EXIST1)
-        subprocess.check_call("touch %s" %(file_name), shell=True)
+        self.assertEqual(self.ip.comCheckCall("touch %s" %(file_name)), IpLib.ESUCCESS)
         self.assertEqual(self.ip.delIpFromIface(IP_EXIST1, IFACE_EXIST1), IpLib.EFAILED)
-        subprocess.check_call("rm -rf %s" %(file_name), shell=True)
+        self.assertEqual(self.ip.comCheckCall("rm -rf %s" %(file_name)), IpLib.ESUCCESS)
         # a test:secondary
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_2, IFACE_EXIST1), IpLib.ESUCCESS)
@@ -138,7 +131,7 @@ class IpLibTestCase(unittest.TestCase):
         self.assertFalse(self.ip.checkIpExists(IP_NEW_2, IFACE_EXIST1))
         self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
         # a test
-        subprocess.check_call("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
+        self.assertEqual(self.ip.comCheckCall("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1)), IpLib.ESUCCESS)
         self.assertTrue(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
         self.assertEqual(self.ip.delIpFromIface(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
         # a test
@@ -313,7 +306,7 @@ class IpLibTestCase(unittest.TestCase):
         self.assertEqual(self.ip.releasePublicIP(IP_EXIST1, ""), IpLib.EINVALID)
         self.assertEqual(self.ip.releasePublicIP(IP_EXIST1, IFACE_NOT_EXIST), IpLib.ESUCCESS)
         # test
-        subprocess.check_call("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1), shell=True)
+        self.assertEqual(self.ip.comCheckCall("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1)), IpLib.ESUCCESS)
         self.assertEqual(self.ip.releasePublicIP(IP_NEW_1, IFACE_EXIST1), IpLib.ESUCCESS)
         self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
         self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
@@ -438,10 +431,42 @@ class IpLibTestCase(unittest.TestCase):
         self.assertFalse(self.ip.checkIpExists(IP_NEW_4, IFACE_EXIST2))
         self.assertFalse(self.ip.checkIpExists(IP_NEW_5, IFACE_EXIST2))
 
+
+    @mock.patch.object(IpLib, 'checkIfaceStatus')
+    @mock.patch.object(IpLib, 'bringUpIface')
+    @mock.patch.object(IpLib, 'checkIpExists')
+    @mock.patch.object(IpLib, 'takePublicIP')
+    def test_checkIpConn(self,
+                         mock_takePublicIP,
+                         mock_checkIpExists,
+                         mock_bringUpIface,
+                         mock_checkIfaceStatus
+                         ):
+        # test
+        mock_checkIfaceStatus.return_value = False
+        mock_bringUpIface.return_value = IpLib.EFAILED
+        self.assertFalse(self.ip.checkIpConn(IP_EXIST1, IFACE_NOT_EXIST))
+        # test
+        mock_checkIfaceStatus.return_value = True
+        mock_checkIpExists.return_value = True
+        self.assertTrue(self.ip.checkIpConn(IP_EXIST1, IFACE_NOT_EXIST))
+        # test
+        mock_checkIfaceStatus.return_value = True
+        mock_checkIpExists.return_value = False
+        mock_takePublicIP.return_value = IpLib.EFAILED
+        self.assertFalse(self.ip.checkIpConn(IP_EXIST1, IFACE_NOT_EXIST))
+        # test
+        mock_checkIfaceStatus.return_value = True
+        mock_checkIpExists.return_value = False
+        mock_takePublicIP.return_value = IpLib.ESUCCESS
+        self.assertTrue(self.ip.checkIpConn(IP_EXIST1, IFACE_NOT_EXIST))
+
+
 if __name__ =='__main__':#
     suite = unittest.TestSuite()
+
     suite.addTest(IpLibTestCase("test_comCheckCall"))
-    suite.addTest(IpLibTestCase("test_getCheckOutput"))
+    suite.addTest(IpLibTestCase("test_getCmdOutput"))
     suite.addTest(IpLibTestCase("test_checkIpv4Valid"))
     suite.addTest(IpLibTestCase("test_ipv4AddrToNet"))
     suite.addTest(IpLibTestCase("test_ipHasConfiguration"))
@@ -461,7 +486,9 @@ if __name__ =='__main__':#
     suite.addTest(IpLibTestCase("test_releasePublicIP"))
     suite.addTest(IpLibTestCase("test_updatePublicIps"))
     suite.addTest(IpLibTestCase("test_releaseAllPublicIps"))
+    suite.addTest(IpLibTestCase("test_checkIpConn"))
 
     #执行测试  
     runner = unittest.TextTestRunner()  
     runner.run(suite) 
+    #unittest.main()

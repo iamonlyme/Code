@@ -47,7 +47,7 @@ class IpLib(object):
 			return IpLib.EFAILED
 		return IpLib.ESUCCESS
 
-	def getCheckOutput(self, command):
+	def getCmdOutput(self, command):
 		try:
 			logger.debug(command)
 			output = subprocess.check_output(command, stderr=open('/dev/null','w'), shell=True)
@@ -217,7 +217,7 @@ class IpLib(object):
 			# not primary
 			logger.debug("Check secondary addr for %s" %(iface))
 			cmmd = "ip addr list dev '%s' secondary | grep 'inet '" %(iface)
-			ret, output = self.getCheckOutput(cmmd)
+			ret, output = self.getCmdOutput(cmmd)
 			if ret != IpLib.ESUCCESS:
 				logger.error("Failed to list secondary addr for %s" %(iface))
 			elif not output:
@@ -474,7 +474,7 @@ class IpLib(object):
 			flush rules and routes
 		"""
 		cmmd = "ip rule show"
-		ret, output = self.getCheckOutput(cmmd)
+		ret, output = self.getCmdOutput(cmmd)
 		if ret != IpLib.ESUCCESS:
 			print("[Error] failed to show ip rules")
 			return ret
@@ -535,7 +535,7 @@ class IpLib(object):
 		"""
 		iface = ""
 		cmmd = "ip addr show| grep 'inet %s '" %(ip)
-		ret, output = self.getCheckOutput(cmmd)
+		ret, output = self.getCmdOutput(cmmd)
 		if ret != IpLib.ESUCCESS or not output:
 			logger.error("Failed to find %s in addr list" %(ip))
 			return ret, iface
