@@ -8,6 +8,8 @@
 # Description : 
 ###############################################
 
+import subprocess
+
 import unittest
 #from unittest.mock import MagicMock,patch
 import mock
@@ -30,6 +32,7 @@ class ComLibTestCase(unittest.TestCase):
         err_cmd = "ls /proc/meminfo_err"
         self.assertEqual(ComLib.comCheckCall(suc_cmd), ComLib.ESUCCESS)
         self.assertEqual(ComLib.comCheckCall(err_cmd), ComLib.EFAILED)
+        #self.assertRaises(subprocess.CalledProcessError, ComLib.comCheckCall, err_cmd)
 
     def test_getCmdOutput(self):
         suc_cmd = "ls /proc/meminfo"

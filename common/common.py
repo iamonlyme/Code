@@ -24,9 +24,6 @@ class ComLib(object):
     EFAILED     = -1
     EINVALID    = -2
 
-    def __init__(self):
-        pass
-
     @staticmethod
     def comCheckCall(command):
         try:
@@ -35,7 +32,7 @@ class ComLib(object):
                                 stdout=open('/dev/null','w'), \
                                 stderr=subprocess.STDOUT, \
                                 shell=True)
-        except:
+        except subprocess.CalledProcessError:
             logger.exception("%s failed" %(command))
             return ComLib.EFAILED
         return ComLib.ESUCCESS
