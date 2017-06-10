@@ -46,6 +46,7 @@ class IpLibTestCase(unittest.TestCase):
         self.assertTrue(self.ip.checkIpv4Valid("192.169.34.24"))
         self.assertTrue(self.ip.checkIpv4Valid("192.169.34.255"))
         self.assertTrue(self.ip.checkIpv4Valid("0.169.34.24"))
+        self.assertFalse(self.ip.checkIpv4Valid("192.169.34.24.24"))
         self.assertFalse(self.ip.checkIpv4Valid("192.169.34.24/24"))
         self.assertFalse(self.ip.checkIpv4Valid(" 192.169.34.24"))
         self.assertFalse(self.ip.checkIpv4Valid("192.169.3 4.24"))
@@ -78,15 +79,16 @@ class IpLibTestCase(unittest.TestCase):
         self.assertEqual(self.ip.bringUpIface(IFACE_NOT_EXIST), IpLib.EFAILED)
 
     def test_checkIpExists(self):
+        self.assertFalse(self.ip.checkIpExists("", IFACE_EXIST1))
+        self.assertFalse(self.ip.checkIpExists(IP_EXIST1, ""))
         self.assertTrue(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST1))
         self.assertFalse(self.ip.checkIpExists(IP_EXIST1, IFACE_EXIST2))
         self.assertFalse(self.ip.checkIpExists(IP_EXIST1, IFACE_NOT_EXIST))
-        self.assertFalse(self.ip.checkIpExists(IP_EXIST1, ""))
         self.assertFalse(self.ip.checkIpExists(IP_NEW_1, IFACE_EXIST1))
         self.assertFalse(self.ip.checkIpExists(IP_NOT_EXIST, IFACE_EXIST1))
-        self.assertFalse(self.ip.checkIpExists("", IFACE_EXIST1))
 
     def test_addIpToIface(self):
+        self.assertEqual(self.ip.addIpToIface("", IFACE_EXIST1), IpLib.EINVALID)
         self.assertEqual(self.ip.addIpToIface("", IFACE_EXIST1), IpLib.EINVALID)
         self.assertEqual(self.ip.addIpToIface(IP_NEW_1, ""), IpLib.EINVALID)
         self.assertEqual(ComLib.comCheckCall("ip addr add %s dev %s" %(IP_NEW_1, IFACE_EXIST1)), IpLib.ESUCCESS)
@@ -252,6 +254,13 @@ class IpLibTestCase(unittest.TestCase):
         self.assertEqual(ComLib.comCheckCall("ip rule list | grep -Fq '%s'" %IP_NEW_1), IpLib.ESUCCESS)
         self.assertEqual(self.ip.delRoutingForIp(IP_NEW_1), IpLib.ESUCCESS)
         self.assertEqual(ComLib.comCheckCall("ip rule list | grep -Fq '%s'" %IP_NEW_1), IpLib.EFAILED)
+
+    def test_updateArpCache(self):
+        self.assertEqual(self.ip.updateArpCache("", IFACE_EXIST1), IpLib.EINVALID)
+        self.assertEqual(self.ip.updateArpCache("192.168.124.1", ""), IpLib.EINVALID)
+        self.assertEqual(self.ip.updateArpCache("192.168.124.1", IFACE_EXIST1), IpLib.EFAILED)
+        self.assertEqual(self.ip.updateArpCache("192.168.124.3", IFACE_EXIST1), IpLib.EFAILED)
+        self.assertEqual(self.ip.updateArpCache("192.168.124.1", IFACE_EXIST1, IP_EXIST1), IpLib.EFAILED)
 
     def test_getIfaceFromIp(self):
         self.assertEqual(self.ip.getIfaceFromIp(IP_NEW_1), (IpLib.EFAILED,""))
@@ -471,6 +480,7 @@ if __name__ =='__main__':#
     suite.addTest(IpLibTestCase("test_eraseTableIdForIp"))
     suite.addTest(IpLibTestCase("test_delRoutingForIp"))
     suite.addTest(IpLibTestCase("test_addRoutingForIp"))
+    suite.addTest(IpLibTestCase("test_updateArpCache"))
     suite.addTest(IpLibTestCase("test_getIfaceFromIp"))
     suite.addTest(IpLibTestCase("test_getPublicIps"))
     suite.addTest(IpLibTestCase("test_takePublicIP"))

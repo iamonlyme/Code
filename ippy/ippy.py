@@ -494,15 +494,17 @@ class IpLib(object):
 
 		return ret
 
-	def updateArpCache(self, dest_ip, iface=None, src_ip=None):
+	def updateArpCache(self, dest_ip, iface, src_ip=None):
 		"""
 			update arp cache
 		"""
-		if iface != None:
-			cmmd = "arping -c 1 -I %s" %(iface)
+		if not dest_ip or not iface:
+			return IpLib.EINVALID
+
+		cmmd = "arping -c 1 -I %s" %(iface)
 		if src_ip != None:
 			cmmd = cmmd + " -s %s" %(src_ip)
-		cmd = cmmd + "  %s" %(dest_ip)
+		cmmd = cmmd + "  %s" %(dest_ip)
 
 		count = 1
 		ret = ComLib.comCheckCall(cmmd)
