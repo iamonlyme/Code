@@ -8,16 +8,19 @@
 # Description : ip routing
 ###############################################
 import os
+import sys
 import stat
 import re
 import socket
 import subprocess
 
+ROOT_PATH = os.path.abspath(os.path.realpath(os.path.dirname(__file__))) + "/.."
+sys.path.append(ROOT_PATH + "/common")
+from common import ComLib
+
 import logging
 import logging.config
-from cmath import log
-
-logging.config.fileConfig("../logger.conf")
+logging.config.fileConfig(ROOT_PATH + "/logger.conf")
 logger = logging.getLogger("ippy")
 
 class IpLib(object):
@@ -34,27 +37,6 @@ class IpLib(object):
 
 	def __init__(self):
 		pass
-
-	def comCheckCall(self, command):
-		try:
-			logger.debug(command)
-			subprocess.check_call(command, \
-								stdout=open('/dev/null','w'), \
-								stderr=subprocess.STDOUT, \
-								shell=True)
-		except:
-			logger.debug("%s failed" %(command))
-			return IpLib.EFAILED
-		return IpLib.ESUCCESS
-
-	def getCmdOutput(self, command):
-		try:
-			logger.debug(command)
-			output = subprocess.check_output(command, stderr=open('/dev/null','w'), shell=True)
-		except:
-			logger.debug("%s failed" %(command))
-			return IpLib.EFAILED, ""
-		return IpLib.ESUCCESS, output
 
 	def checkIpv4Valid(self, ip):
 		"""
@@ -121,7 +103,7 @@ class IpLib(object):
 			check iface status, False - Down; True - UP
 		"""
 		cmmd = "ip link show %s | grep 'state UP'" %(iface)
-		ret = self.comCheckCall(cmmd)
+		ret = ComLib.comCheckCall(cmmd)
 		if ret != IpLib.ESUCCESS:
 			return False
 		else:
@@ -132,7 +114,7 @@ class IpLib(object):
 			bring up iface
 		"""
 		cmmd = "ip link set %s up" %(iface)
-		return self.comCheckCall(cmmd)
+		return ComLib.comCheckCall(cmmd)
 
 	def checkIpExists(self, ip, iface):
 		"""
@@ -143,7 +125,7 @@ class IpLib(object):
 			return False
 
 		cmmd = "ip addr list dev '%s' | grep -Fq 'inet %s '" %(iface, ip)
-		ret = self.comCheckCall(cmmd)
+		ret = ComLib.comCheckCall(cmmd)
 		if ret != IpLib.ESUCCESS:
 			return False
 		else:
@@ -176,7 +158,7 @@ class IpLib(object):
 		else:
 			# add ip address to interface
 			cmmd = "ip addr add %s brd + dev %s" %(ip, iface)
-			ret = self.comCheckCall(cmmd)
+			ret = ComLib.comCheckCall(cmmd)
 			if ret != IpLib.ESUCCESS:
 				logger.error("Failed to add %s on dev %s" %(ip, iface))
 
@@ -212,12 +194,12 @@ class IpLib(object):
 		"""
 		secondaries=[]
 		cmmd = "ip addr list dev '%s' primary | grep -Fq 'inet %s '" %(iface, ip)
-		ret = self.comCheckCall(cmmd)
+		ret = ComLib.comCheckCall(cmmd)
 		if ret != IpLib.ESUCCESS:
 			# not primary
 			logger.debug("Check secondary addr for %s" %(iface))
 			cmmd = "ip addr list dev '%s' secondary | grep 'inet '" %(iface)
-			ret, output = self.getCmdOutput(cmmd)
+			ret, output = ComLib.getCmdOutput(cmmd)
 			if ret != IpLib.ESUCCESS:
 				logger.error("Failed to list secondary addr for %s" %(iface))
 			elif not output:
@@ -243,7 +225,7 @@ class IpLib(object):
 
 		local_rc = 0
 		cmmd = "ip addr del '%s' dev '%s'" %(ip, iface)
-		ret = self.comCheckCall(cmmd)
+		ret = ComLib.comCheckCall(cmmd)
 		if ret != IpLib.ESUCCESS:
 			logger.error("Failed to del %s on dev %s" %(ip, iface))
 			local_rc = 1
@@ -252,13 +234,13 @@ class IpLib(object):
 			if snd_ip == ip:
 				continue
 			cmmd = "ip addr list dev '%s' secondary | grep -Fq 'inet %s'" %(iface, snd_ip)
-			ret = self.comCheckCall(cmmd)
+			ret = ComLib.comCheckCall(cmmd)
 			if ret == IpLib.ESUCCESS:
 				logger.info("Kept secondary %s on dev %s" %(snd_ip, iface))
 			else:
 				logger.info("Re-adding secondary address %s to dev %s" %(snd_ip, iface))
 				cmmd = "ip addr add %s brd + dev %s" %(snd_ip, iface)
-				ret = self.comCheckCall(cmmd)
+				ret = ComLib.comCheckCall(cmmd)
 				if ret != IpLib.ESUCCESS:
 					logger.error("Failed to re-add address %s to dev %s" %(snd_ip, iface))
 					local_rc = 1
@@ -415,7 +397,7 @@ class IpLib(object):
 		pref = IpLib.PER_IP_ROUTING_RULE_PREF
 		table_id = IpLib.TABLE_ID_PREFIX + ip
 		cmmd = "ip rule del from %s pref %s table %s" %(ip, pref, table_id)
-		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
+		if ComLib.comCheckCall(cmmd) != IpLib.ESUCCESS:
 			logger.error("[Error]failed to del rule for %s" %(ip))
 			#ret_rule = IpLib.EFAILED
 
@@ -428,7 +410,7 @@ class IpLib(object):
 		# warning message and doesn't look too nasty.
 		# ip route flush table $_table_id 2>&1 | sed -e 's@^.@  &@'
 		cmmd = "ip route flush table %s" %(table_id)
-		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
+		if ComLib.comCheckCall(cmmd) != IpLib.ESUCCESS:
 			logger.error("Failed to flush rule for deleting %s" %(table_id))
 			#ret_route = IpLib.EFAILED
 
@@ -451,7 +433,7 @@ class IpLib(object):
 		pref = IpLib.PER_IP_ROUTING_RULE_PREF
 		table_id = IpLib.TABLE_ID_PREFIX + ip
 		cmmd = "ip rule add from %s pref %s table %s" %(ip, pref, table_id)
-		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
+		if ComLib.comCheckCall(cmmd) != IpLib.ESUCCESS:
 			logger.error("Failed to add rule for %s" %(ip))
 			return IpLib.EFAILED
 
@@ -462,10 +444,10 @@ class IpLib(object):
 		else:
 			route = "%s dev %s table %s" %(net_wlan, iface, table_id)
 		cmmd = "ip route add %s" %(route)
-		if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
+		if ComLib.comCheckCall(cmmd) != IpLib.ESUCCESS:
 			logger.error("Failed to add route: %s" %(route))
 			cmmd = "ip rule del from %s pref %s table %s" %(ip, pref, table_id)
-			self.comCheckCall(cmmd)
+			ComLib.comCheckCall(cmmd)
 			return IpLib.EFAILED
 		return IpLib.ESUCCESS
 
@@ -474,7 +456,7 @@ class IpLib(object):
 			flush rules and routes
 		"""
 		cmmd = "ip rule show"
-		ret, output = self.getCmdOutput(cmmd)
+		ret, output = ComLib.getCmdOutput(cmmd)
 		if ret != IpLib.ESUCCESS:
 			print("[Error] failed to show ip rules")
 			return ret
@@ -502,11 +484,11 @@ class IpLib(object):
 			tb_name = m.group(3)
 			print('Removing ip rule for public address %s for routing table %s' %(ip, tb_name))
 			cmmd = "ip rule del from %s table %s pref %s" %(ip, tb_name, IpLib.PER_IP_ROUTING_RULE_PREF)
-			if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
+			if ComLib.comCheckCall(cmmd) != IpLib.ESUCCESS:
 				print("[Error]failed to delete rule for %s" %(ip))
 				ret = IpLib.EFAILED
 			cmmd = "ip route flush table %s" %(tb_name)
-			if self.comCheckCall(cmmd) != IpLib.ESUCCESS:
+			if ComLib.comCheckCall(cmmd) != IpLib.ESUCCESS:
 				print("[Error]failed to flush table %s" %(tb_name))
 				ret = IpLib.EFAILED
 
@@ -523,10 +505,10 @@ class IpLib(object):
 		cmd = cmmd + "  %s" %(dest_ip)
 
 		count = 1
-		ret = self.comCheckCall(cmmd)
+		ret = ComLib.comCheckCall(cmmd)
 		while (count < 2) and (ret != IpLib.EFAILED):
 			count = count + 1
-			ret = self.comCheckCall(cmmd)
+			ret = ComLib.comCheckCall(cmmd)
 
 		return ret
 
@@ -535,7 +517,7 @@ class IpLib(object):
 		"""
 		iface = ""
 		cmmd = "ip addr show| grep 'inet %s '" %(ip)
-		ret, output = self.getCmdOutput(cmmd)
+		ret, output = ComLib.getCmdOutput(cmmd)
 		if ret != IpLib.ESUCCESS or not output:
 			logger.error("Failed to find %s in addr list" %(ip))
 			return ret, iface
