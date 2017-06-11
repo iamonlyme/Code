@@ -13,13 +13,12 @@ import stat
 import re
 import socket
 import subprocess
-
-ROOT_PATH = os.path.abspath(os.path.realpath(os.path.dirname(__file__))) + "/.."
-sys.path.append(ROOT_PATH + "/common")
-from common import ComLib
-
 import logging
 import logging.config
+
+from common import ComLib
+
+ROOT_PATH = os.path.abspath(os.path.realpath(os.path.dirname(__file__))) + "/.."
 logging.config.fileConfig(ROOT_PATH + "/logger.conf")
 logger = logging.getLogger("ippy")
 

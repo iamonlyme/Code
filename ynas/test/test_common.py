@@ -7,12 +7,14 @@
 # Created Time: Thu 01 Jun 2017 02:34:35 PM CST
 # Description : 
 ###############################################
-
+import os
+import sys
 import subprocess
-
 import unittest
-#from unittest.mock import MagicMock,patch
 import mock
+
+ROOT_PATH = os.path.abspath(os.path.realpath(os.path.dirname(__file__))) + "/.."
+sys.path.append(ROOT_PATH + "/src")
 
 from common import ComLib
 

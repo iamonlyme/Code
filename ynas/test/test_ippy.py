@@ -14,9 +14,9 @@ import unittest
 import mock
 
 ROOT_PATH = os.path.abspath(os.path.realpath(os.path.dirname(__file__))) + "/.."
-sys.path.append(ROOT_PATH + "/common")
-from common import ComLib
+sys.path.append(ROOT_PATH + "/src")
 
+from common import ComLib
 from ippy import IpLib
 
 IFACE_EXIST1  = "eno33554984"
